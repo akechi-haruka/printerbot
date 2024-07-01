@@ -19,3 +19,5 @@ Note: Firmware updating is blocked.
 --- Compiling ---
 
 have msys2 installed at the default location and run compile.bat
+
+or use CLion

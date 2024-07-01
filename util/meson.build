@@ -6,6 +6,8 @@ util_lib = static_library(
     dependencies : [
     ],
     sources : [
+        'brickprotect.c',
+        'brickprotect.h',
         'dprintf.c',
         'dprintf.h',
         'dump.c',

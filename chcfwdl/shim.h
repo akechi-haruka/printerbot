@@ -1,5 +1,21 @@
 #pragma once
 
+#include "printerbot/config.h"
+
+#define kPINFTAG_PAPER 0
+#define kPINFTAG_USBINQ 2
+#define kPINFTAG_ENGID 3
+#define kPINFTAG_PRINTCNT 4
+#define kPINFTAG_PRINTCNT2 5
+#define kPINFTAG_SVCINFO 7
+#define kPINFTAG_PRINTSTANDBY 8
+#define kPINFTAG_MEMORY 16
+#define kPINFTAG_PRINTMODE 20
+#define kPINFTAG_SERIALINFO 26
+#define kPINFTAG_TEMPERATURE 40
+#define kPINFTAG_ERRHISTORY 50
+#define kPINFTAG_TONETABLE 60
+
 void chcfwdl_shim_install(struct printerbot_config* cfg);
 
 int fwdlusb_open(uint16_t * rResult);

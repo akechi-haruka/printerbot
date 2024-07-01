@@ -6,16 +6,24 @@
 #include <stdlib.h>
 #include <winuser.h>
 
+#include "chcfwdl/shim.h"
+
 #include "printerbot/config.h"
+
 #include "util/dprintf.h"
 
 struct printerbot_config cfg;
 
-BOOL WINAPI DllMain(HMODULE mod, DWORD cause, void *ctx)
-{
-    HRESULT hr;
+static bool initialized = false;
+
+BOOL WINAPI DllMain(HMODULE mod, DWORD cause, void *ctx) {
 
     if (cause != DLL_PROCESS_ATTACH) {
+        return TRUE;
+    }
+
+    if (initialized){
+        dprintf(NAME ": Double-initialization\n");
         return TRUE;
     }
 
@@ -23,9 +31,16 @@ BOOL WINAPI DllMain(HMODULE mod, DWORD cause, void *ctx)
 
     printerbot_config_load(&cfg, ".\\printerbot.ini");
 
+    if (!cfg.enable) {
+        dprintf(NAME ": Disabled\n");
+        return TRUE;
+    }
+
     chcfwdl_shim_install(&cfg);
 
     dprintf(NAME ": roll out!\n");
 
-    return SUCCEEDED(hr);
+    initialized = true;
+
+    return TRUE;
 }
