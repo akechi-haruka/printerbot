@@ -1,0 +1,19 @@
+LIBRARY chcusb
+
+EXPORTS
+    fwdlusb_open
+    fwdlusb_close
+    fwdlusb_listupPrinter
+    fwdlusb_listupPrinterSN
+    fwdlusb_selectPrinter
+    fwdlusb_selectPrinterSN
+    fwdlusb_getPrinterInfo
+    fwdlusb_status
+    fwdlusb_statusAll
+    fwdlusb_resetPrinter
+    fwdlusb_updateFirmware
+    fwdlusb_getFirmwareInfo
+    fwdlusb_MakeThread
+    fwdlusb_ReleaseThread
+    fwdlusb_AttachThreadCount
+    fwdlusb_getErrorLog
