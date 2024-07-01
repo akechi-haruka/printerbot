@@ -1,6 +1,10 @@
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "OCUnusedGlobalDeclarationInspection"
 
+#include <windows.h>
+#include <assert.h>
+#include <stdio.h>
+
 #include "chcfwdl/shim.h"
 
 #include "printerbot/config.h"
@@ -21,7 +25,7 @@ static uint8_t paramFirmware[0x40] = {0};
 typedef int (*ogfwdlusb_open)(uint16_t *);
 
 int fwdlusb_open(uint16_t *rResult) {
-    dprintf_sv("%s\n", __func__);
+    dprintf_sv(NAME ": %s\n", __func__);
     int ret = ((ogfwdlusb_open) shim[0])(rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
     return ret;
@@ -30,14 +34,14 @@ int fwdlusb_open(uint16_t *rResult) {
 typedef void (*ogfwdlusb_close)();
 
 void fwdlusb_close() {
-    dprintf_sv("%s\n", __func__);
+    dprintf_sv(NAME ": %s\n", __func__);
     ((ogfwdlusb_close) shim[1])();
 }
 
 typedef int (*ogfwdlusb_listupPrinter)(uint8_t *rIdArray);
 
 int fwdlusb_listupPrinter(uint8_t *rIdArray) {
-    dprintf_sv("%s\n", __func__);
+    dprintf_sv(NAME ": %s\n", __func__);
     int ret = ((ogfwdlusb_listupPrinter) shim[2])(rIdArray);
     return ret;
 }
@@ -45,7 +49,7 @@ int fwdlusb_listupPrinter(uint8_t *rIdArray) {
 typedef int (*ogfwdlusb_listupPrinterSN)(uint64_t *rSerialArray);
 
 int fwdlusb_listupPrinterSN(uint64_t *rSerialArray) {
-    dprintf_sv("%s\n", __func__);
+    dprintf_sv(NAME ": %s\n", __func__);
     int ret = ((ogfwdlusb_listupPrinterSN) shim[3])(rSerialArray);
     return ret;
 }
@@ -53,7 +57,7 @@ int fwdlusb_listupPrinterSN(uint64_t *rSerialArray) {
 typedef int (*ogfwdlusb_selectPrinter)(uint8_t printerId, uint16_t *rResult);
 
 int fwdlusb_selectPrinter(uint8_t printerId, uint16_t *rResult) {
-    dprintf_sv("%s(%d)\n", __func__, printerId);
+    dprintf_sv(NAME ": %s(%d)\n", __func__, printerId);
     int ret = ((ogfwdlusb_selectPrinter) shim[4])(printerId, rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
     return ret;
@@ -62,7 +66,7 @@ int fwdlusb_selectPrinter(uint8_t printerId, uint16_t *rResult) {
 typedef int (*ogfwdlusb_selectPrinterSN)(uint64_t printerSN, uint16_t *rResult);
 
 int fwdlusb_selectPrinterSN(uint64_t printerSN, uint16_t *rResult) {
-    dprintf_sv("%s(%ld)\n", __func__, printerSN);
+    dprintf_sv(NAME ": %s(%ld)\n", __func__, printerSN);
     int ret = ((ogfwdlusb_selectPrinterSN) shim[5])(printerSN, rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
     return ret;
@@ -71,7 +75,7 @@ int fwdlusb_selectPrinterSN(uint64_t printerSN, uint16_t *rResult) {
 typedef int (*ogfwdlusb_getPrinterInfo)(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen);
 
 int fwdlusb_getPrinterInfo(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen) {
-    dprintf_sv("%s(%d,%d)\n", __func__, tagNumber, *rLen);
+    dprintf_sv(NAME ": %s(%d,%d)\n", __func__, tagNumber, *rLen);
     if (tagNumber == kPINFTAG_ENGID) {
         if (config.allow_firmware_write != BRICK_PRINTER_MAGIC_ID) {
             if (*rLen != 0x99) *rLen = 0x99;
@@ -99,7 +103,7 @@ int fwdlusb_getPrinterInfo(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen)
 typedef int (*ogfwdlusb_status)(uint16_t *rResult);
 
 int fwdlusb_status(uint16_t *rResult) {
-    dprintf_sv("%s\n", __func__);
+    dprintf_sv(NAME ": %s\n", __func__);
     int ret = ((ogfwdlusb_status) shim[7])(rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
     return ret;
@@ -108,7 +112,7 @@ int fwdlusb_status(uint16_t *rResult) {
 typedef int (*ogfwdlusb_statusAll)(uint8_t *idArray, uint16_t *rResultArray);
 
 int fwdlusb_statusAll(uint8_t *idArray, uint16_t *rResultArray) {
-    dprintf_sv("%s\n", __func__);
+    dprintf_sv(NAME ": %s\n", __func__);
     int ret = ((ogfwdlusb_statusAll) shim[8])(idArray, rResultArray);
     return ret;
 }
@@ -116,7 +120,7 @@ int fwdlusb_statusAll(uint8_t *idArray, uint16_t *rResultArray) {
 typedef int (*ogfwdlusb_resetPrinter)(uint16_t *rResult);
 
 int fwdlusb_resetPrinter(uint16_t *rResult) {
-    dprintf_sv("%s\n", __func__);
+    dprintf_sv(NAME ": %s\n", __func__);
     int ret = ((ogfwdlusb_resetPrinter) shim[9])(rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
     return ret;
@@ -262,7 +266,7 @@ int fwdlusb_updateFirmware_param(uint8_t update, LPCSTR filename, uint16_t *rRes
 typedef int (*ogfwdlusb_updateFirmware)(uint8_t update, LPCSTR filename, uint16_t *rResult);
 
 int fwdlusb_updateFirmware(uint8_t update, LPCSTR filename, uint16_t *rResult) {
-    dprintf_sv("%s(%d, %s)\n", __func__, update, filename);
+    dprintf_sv(NAME ": %s(%d, %s)\n", __func__, update, filename);
     if (config.allow_firmware_write != BRICK_PRINTER_MAGIC_ID) {
         if (update == 1) {
             return fwdlusb_updateFirmware_main(update, filename, rResult);
@@ -367,7 +371,7 @@ typedef int (*ogfwdlusb_getFirmwareInfo)(uint8_t update, LPCSTR filename, uint8_
                                          uint16_t *rResult);
 
 int fwdlusb_getFirmwareInfo(uint8_t update, LPCSTR filename, uint8_t *rBuffer, uint32_t *rLen, uint16_t *rResult) {
-    dprintf_sv("%s(%d, %s)\n", __func__, update, filename);
+    dprintf_sv(NAME ": %s(%d, %s)\n", __func__, update, filename);
 
     if (config.allow_firmware_write != BRICK_PRINTER_MAGIC_ID) {
         if (!rBuffer) {
@@ -395,7 +399,7 @@ int fwdlusb_getFirmwareInfo(uint8_t update, LPCSTR filename, uint8_t *rBuffer, u
 typedef int (*ogfwdlusb_MakeThread)(uint16_t maxCount);
 
 int fwdlusb_MakeThread(uint16_t maxCount) {
-    dprintf_sv("%s(%d)\n", __func__, maxCount);
+    dprintf_sv(NAME ": %s(%d)\n", __func__, maxCount);
     int ret = ((ogfwdlusb_MakeThread) shim[12])(maxCount);
     return ret;
 }
@@ -403,7 +407,7 @@ int fwdlusb_MakeThread(uint16_t maxCount) {
 typedef int (*ogfwdlusb_ReleaseThread)(uint16_t *rResult);
 
 int fwdlusb_ReleaseThread(uint16_t *rResult) {
-    dprintf_sv("%s\n", __func__);
+    dprintf_sv(NAME ": %s\n", __func__);
     int ret = ((ogfwdlusb_ReleaseThread) shim[13])(rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
     return ret;
@@ -412,7 +416,7 @@ int fwdlusb_ReleaseThread(uint16_t *rResult) {
 typedef int (*ogfwdlusb_AttachThreadCount)(uint16_t *rCount, uint16_t *rMaxCount);
 
 int fwdlusb_AttachThreadCount(uint16_t *rCount, uint16_t *rMaxCount) {
-    dprintf_sv("%s\n", __func__);
+    dprintf_sv(NAME ": %s\n", __func__);
     int ret = ((ogfwdlusb_AttachThreadCount) shim[14])(rCount, rMaxCount);
     return ret;
 }
@@ -420,7 +424,7 @@ int fwdlusb_AttachThreadCount(uint16_t *rCount, uint16_t *rMaxCount) {
 typedef int (*ogfwdlusb_getErrorLog)(uint16_t index, uint8_t *rData, uint16_t *rResult);
 
 int fwdlusb_getErrorLog(uint16_t index, uint8_t *rData, uint16_t *rResult) {
-    dprintf_sv("%s(%d)\n", __func__, index);
+    dprintf_sv(NAME ": %s(%d)\n", __func__, index);
     int ret = ((ogfwdlusb_getErrorLog) shim[15])(index, rData, rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
     return ret;

@@ -4,19 +4,23 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define NAME "Printerbot[chcfwdl]"
-
 // seriously, don't
 #define BRICK_PRINTER_MAGIC_ID 0x9111849
 
 struct printerbot_config {
+    bool enable;
     int from;
     int to;
-    int imagemode;
-    bool enable;
+
     int allow_firmware_write;
     char main_fw_path[MAX_PATH];
     char param_fw_path[MAX_PATH];
+
+    int imagemode;
+    int from_width;
+    int from_height;
+    int to_width;
+    int to_height;
 };
 
 void printerbot_config_load(

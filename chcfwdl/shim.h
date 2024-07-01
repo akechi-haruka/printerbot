@@ -1,5 +1,7 @@
 #pragma once
 
+#define NAME "Printerbot[chcfwdl]"
+
 #include "printerbot/config.h"
 
 #define kPINFTAG_PAPER 0

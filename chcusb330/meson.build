@@ -1,5 +1,5 @@
-chcusb = shared_library(
-    'chcusb',
+chcusb330 = shared_library(
+    'chcusb330',
     name_prefix : '',
     include_directories : inc,
     implicit_include_directories : false,
@@ -8,6 +8,7 @@ chcusb = shared_library(
     link_with : [
         util_lib,
         printerbot_lib,
+        chcusb,
     ],
     dependencies : [
     ],

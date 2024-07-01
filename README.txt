@@ -10,8 +10,9 @@ Note: Firmware updating is blocked.
 --- Usage ---
 
 * Place CHCXXXusb.dll and CHCXXXFWDLUsb.dll into game folder.
-* Backup the original files and rename the shim files to your printer model (ex. CHC310Ausb.dll, CHC310AFWDLUsb.dll)
-* Copy the real DLLs from your target printer into the game folder (ex. CHC330Ausb.dll, CHC330AFWDLUsb.dll)
+    * If the existing printer is a CHC-330, use CHC330Ausb.dll instead
+* Backup the original files and rename the shim files to your printer model (ex. C310Ausb.dll, C310AFWDLUsb.dll)
+* Copy the real DLLs from your target printer into the game folder (ex. C330Ausb.dll, C330AFWDLUsb.dll)
 * Edit printerbot.ini that incoming and outgoing model numbers match.
 * Make sure segatools printerhooks are disabled.
 * Start the game (no inject required for printerbot)

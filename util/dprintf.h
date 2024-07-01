@@ -22,7 +22,7 @@ void dwprintfv(const wchar_t *fmt, va_list ap);
 #endif
 
 #if SUPER_VERBOSE
-#define SUPER_VERBOSE_RESULT_PRINT(var) dprintf("Printer: Call Result: %d\n", var);
+#define SUPER_VERBOSE_RESULT_PRINT(var) dprintf("Printer: Call Result: %d\n", var)
 static void dprintf_svf(const char *fmt, va_list ap){
     dprintfv(fmt, ap);
 }

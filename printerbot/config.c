@@ -33,9 +33,19 @@ void printerbot_config_load(
     cfg->to = GetPrivateProfileIntA("printerbot", "to", -1, filename);
     cfg->imagemode = GetPrivateProfileIntA("printerbot", "imagemode", 0, filename);
     cfg->allow_firmware_write = GetPrivateProfileIntA("printerbot", "i_want_to_possibly_brick_my_printer", 0, filename);
+    cfg->from_width = GetPrivateProfileIntA("printerbot", "from_width", 0, filename);
+    cfg->from_height = GetPrivateProfileIntA("printerbot", "from_height", 0, filename);
+    cfg->to_width = GetPrivateProfileIntA("printerbot", "to_width", 0, filename);
+    cfg->to_height = GetPrivateProfileIntA("printerbot", "to_height", 0, filename);
 
     if (cfg->from < 0 || cfg->to < 0){
         dprintf("Printerbot: invalid printer identifiers (or config not found)\n");
         exit(1);
     }
+
+    if (cfg->from_width <= 0 || cfg->from_height <= 0 || cfg->to_width <= 0 || cfg->to_height <= 0){
+        dprintf("Printerbot: invalid image size (or config not found)\n");
+        exit(1);
+    }
+
 }
