@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <util/imagemanipulation.h>
+#include <util/dump.h>
 #include "chcusb/shim.h"
 #include "printerbot/config.h"
 #define SUPER_VERBOSE 1
@@ -38,6 +39,7 @@ int chcusb_open(uint16_t *rResult) {
     int ret = ((ogchcusb_open) shim[1])(rResult);
 
     if (ret == 1 && *rResult == 0){
+        rfid_close();
         if (FAILED(rfid_connect(config.rfid_port, config.rfid_baud))){
             *rResult = ERROR_RFID_FAIL;
         }
@@ -117,10 +119,26 @@ int chcusb_getPrinterInfo(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen) 
 typedef int (*ogchcusb_imageformat_310)(uint16_t format, uint16_t ncomp, uint16_t depth, uint16_t width,
                                         uint16_t height, uint8_t *inputImage, uint16_t *rResult);
 
+typedef int (*ogchcusb_imageformat_330)(uint16_t format, uint16_t ncomp, uint16_t depth, uint16_t width, uint16_t height, uint16_t *rResult);
+
+
 int chcusb_imageformat_310(uint16_t format, uint16_t ncomp, uint16_t depth, uint16_t width, uint16_t height,
                            uint8_t *inputImage, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d, %d, %d, %d, %d)\n", __func__, format, ncomp, depth, width, height);
-    int ret = ((ogchcusb_imageformat_310) shim[9])(format, ncomp, depth, width, height, inputImage, rResult);
+
+    width = config.to_width;
+    height = config.to_height;
+
+    int ret;
+    if (config.to == 310) {
+        ret = ((ogchcusb_imageformat_310) shim[9])(format, ncomp, depth, width, height, inputImage, rResult);
+    } else if (config.to == 330){
+        ret = ((ogchcusb_imageformat_330) shim[9])(format, ncomp, depth, width, height, rResult);
+    } else {
+        dprintf(NAME ": Unknown target printer: %d\n", config.to);
+        *rResult = 2405;
+        ret = 1;
+    }
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
     return ret;
 }
@@ -186,11 +204,16 @@ int chcusb_statusAll(uint8_t *idArray, uint16_t *rResultArray) {
     return ret;
 }
 
-
 typedef int (*ogchcusb_startpage)(uint16_t postCardState, uint16_t *pageId, uint16_t *rResult);
 
 int chcusb_startpage(uint16_t postCardState, uint16_t *pageId, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d, %d)\n", __func__, postCardState, *pageId);
+
+    if (config.to == 330 && postCardState == 1){
+        dprintf_sv(NAME ": Convert postCardState to 3\n");
+        postCardState = 3;
+    }
+
     int ret = ((ogchcusb_startpage) shim[16])(postCardState, pageId, rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
     return ret;
@@ -212,13 +235,24 @@ typedef int (*ogchcusb_write)(uint8_t *data, uint32_t *writeSize, uint16_t *rRes
 int chcusb_write(uint8_t *data, uint32_t *writeSize, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d)\n", __func__, *writeSize);
 
+    uint32_t orig_writeSize = *writeSize;
     uint32_t len = 0;
     uint8_t* resized = bicubicresize(data, config.from_width, config.from_height, config.to_width, config.to_height, &len, 3);
     dprintf(NAME ": Image resized from %d to %d bytes\n", *writeSize, len);
     *writeSize = len;
 
-    int ret = ((ogchcusb_write) shim[18])(resized, writeSize, rResult);
-    SUPER_VERBOSE_RESULT_PRINT(*rResult);
+    uint32_t written = 0;
+    int ret;
+    do {
+        ret = ((ogchcusb_write) shim[18])(resized + written, writeSize, rResult);
+        dprintf_sv(NAME ": %d bytes written to printer\n", *writeSize);
+        written += *writeSize;
+        SUPER_VERBOSE_RESULT_PRINT(*rResult);
+        if (*rResult != 0){
+            return ret;
+        }
+    } while (written < len);
+    *writeSize = orig_writeSize;
 
     free(resized);
 
@@ -242,13 +276,24 @@ typedef int (*ogchcusb_writeHolo)(uint8_t *data, uint32_t *writeSize, uint16_t *
 int chcusb_writeHolo(uint8_t *data, uint32_t *writeSize, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d)\n", __func__, *writeSize);
 
+    uint32_t orig_writeSize = *writeSize;
     uint32_t len = 0;
     uint8_t* resized = bicubicresize(data, config.from_width, config.from_height, config.to_width, config.to_height, &len, 1);
     dprintf(NAME ": Image resized from %d to %d bytes\n", *writeSize, len);
     *writeSize = len;
 
-    int ret = ((ogchcusb_writeHolo) shim[20])(resized, writeSize, rResult);
-    SUPER_VERBOSE_RESULT_PRINT(*rResult);
+    uint32_t written = 0;
+    int ret;
+    do {
+        ret = ((ogchcusb_write) shim[20])(resized + written, writeSize, rResult);
+        dprintf_sv(NAME ": %d bytes written to printer\n", *writeSize);
+        written += *writeSize;
+        SUPER_VERBOSE_RESULT_PRINT(*rResult);
+        if (*rResult != 0){
+            return ret;
+        }
+    } while (written < len);
+    *writeSize = orig_writeSize;
 
     free(resized);
 
@@ -260,6 +305,18 @@ typedef int (*ogchcusb_setPrinterInfo)(uint16_t tagNumber, uint8_t *rBuffer, uin
 
 int chcusb_setPrinterInfo(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d, %d)\n", __func__, tagNumber, *rLen);
+#if SUPER_VERBOSE
+    dump(rBuffer, *rLen);
+#endif
+
+    if (tagNumber == 0) { // PAPERINFO
+        rBuffer[0] = 0x02; // ???
+        rBuffer[1] = config.to_width;
+        rBuffer[2] = config.to_width >> 8;
+        rBuffer[3] = config.to_height;
+        rBuffer[4] = config.to_height >> 8;
+    }
+
     int ret = ((ogchcusb_setPrinterInfo) shim[21])(tagNumber, rBuffer, rLen, rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
     return ret;
@@ -351,6 +408,9 @@ int chcusb_getPrintIDStatus(uint16_t pageId, uint8_t *rBuffer, uint16_t *rResult
     dprintf_sv(NAME ": %s(%d)\n", __func__, pageId);
     int ret = ((ogchcusb_getPrintIDStatus) shim[30])(pageId, rBuffer, rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
+#if SUPER_VERBOSE
+    dump(rBuffer, 14);
+#endif
     return ret;
 }
 
@@ -388,11 +448,16 @@ int chcusb_exitCard(uint16_t *rResult) {
 typedef int (*ogchcusb_getCardRfidTID)(uint8_t *rCardTID, uint16_t *rResult);
 
 int chcusb_getCardRfidTID(uint8_t *rCardTID, uint16_t *rResult) {
-    // TODO
     dprintf_sv(NAME ": %s\n", __func__);
-    int ret = ((ogchcusb_getCardRfidTID) shim[34])(rCardTID, rResult);
+
+    if (FAILED(rfid_get_card_tid(rCardTID))){
+        *rResult = ERROR_RFID_FAIL;
+    } else {
+        *rResult = ERROR_RFID_OK;
+    }
+
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
-    return ret;
+    return 1;
 }
 
 

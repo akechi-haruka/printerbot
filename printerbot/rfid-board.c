@@ -1,13 +1,7 @@
 #include <windows.h>
-
 #include <assert.h>
 #include <stddef.h>
 #include <stdio.h>
-
-#include "printerbot/config.h"
-
-#include <windows.h>
-#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 #define SUPER_VERBOSE 1
@@ -22,6 +16,8 @@ if (pos >= max){ \
     return E_NOT_SUFFICIENT_BUFFER; \
 }
 #define COMM_BUF_SIZE 255
+
+#define CHECKSUM_IS_ERROR 0
 
 static HANDLE hSerial = INVALID_HANDLE_VALUE;
 
@@ -57,8 +53,8 @@ HRESULT rfid_connect(int port, int baud) {
     dcbSerialParams.ByteSize = 8;
     dcbSerialParams.StopBits = ONESTOPBIT;
     dcbSerialParams.Parity = NOPARITY;
-    /*dcbSerialParams.fDtrControl = DTR_CONTROL_ENABLE;
-    dcbSerialParams.fRtsControl = RTS_CONTROL_ENABLE;*/
+    dcbSerialParams.fDtrControl = DTR_CONTROL_ENABLE;
+    dcbSerialParams.fRtsControl = RTS_CONTROL_ENABLE;
     if (!SetCommState(hSerial, &dcbSerialParams)) {
         uint32_t er = GetLastError();
         dprintf(RFIDNAME ": Failed to set port parameters: %u\n", er);
@@ -76,14 +72,15 @@ HRESULT rfid_connect(int port, int baud) {
     SetCommTimeouts(hSerial,&cto);
 
     dprintf(RFIDNAME ": Successfully opened port\n");
-    return S_OK;
+
+    return rfid_reset();
 }
 
 HRESULT rfid_encode(const uint8_t *in, uint32_t inlen, uint8_t *out, uint32_t *outlen){
     if (in == NULL || out == NULL || outlen == NULL){
         return E_HANDLE;
     }
-    if (inlen < 4){
+    if (inlen < 2){
         return E_INVALIDARG;
     }
     if (*outlen < inlen + 2){
@@ -116,54 +113,85 @@ HRESULT rfid_encode(const uint8_t *in, uint32_t inlen, uint8_t *out, uint32_t *o
     return S_OK;
 }
 
-HRESULT rfid_decode(const uint8_t *in, uint32_t inlen, uint8_t *out, uint32_t *outlen){
-    if (out == NULL || outlen == NULL){
+HRESULT serial_read_single_byte(HANDLE handle, uint8_t* ptr){
+    if (!ReadFile(handle, ptr, 1, NULL, NULL)){
+        uint32_t er = GetLastError();
+        dprintf(RFIDNAME ": Failed to read from serial port: %u\n", er);
+        return HRESULT_FROM_WIN32(er);
+    }
+    return S_OK;
+}
+
+HRESULT rfid_decoding_read(HANDLE handle, uint8_t *out, uint32_t *outlen){
+    if (handle == NULL || out == NULL || outlen == NULL){
         return E_HANDLE;
     }
-    if (inlen < 6){
-        return E_INVALIDARG;
-    }
-    if (*outlen < inlen - 2){
-        return E_NOT_SUFFICIENT_BUFFER;
-    }
 
+    const uint32_t len_byte_offset = 3;
     uint8_t checksum = 0;
     uint32_t offset = 0;
+    int bytes_left = COMM_BUF_SIZE;
+    HRESULT hr;
+    bool escape_flag = false;
 
-    if (in[offset++] != 0xE0){
-        dprintf(RFIDNAME ": Failed to read from serial port: RFID decode failed: Sync failure: %x\n", in[0]);
-        return HRESULT_FROM_WIN32(ERROR_DATA_CHECKSUM_ERROR);
-    }
+    do {
+        hr = serial_read_single_byte(handle, out + offset);
+        if (FAILED(hr)){
+            return hr;
+        }
 
-    for (int i = 0; i < inlen - 1; i++){
-        uint8_t byte = in[i];
+        uint8_t byte = *(out + offset);
 
-        if (byte == 0xE0){
-            dprintf(RFIDNAME ": Failed to read from serial port: RFID decode failed: Found unexpected sync byte in stream at pos %d\n", i);
-            return HRESULT_FROM_WIN32(ERROR_DATA_CHECKSUM_ERROR);
-        } else if (byte == 0xD0){
-            CHECK_OFFSET_BOUNDARY(offset+1, *outlen)
-            uint8_t ebyte = in[++i];
-            if (ebyte == 0xD0){
-                dprintf(RFIDNAME ": Failed to read from serial port: RFID decode failed: Found unexpected escape byte in stream at pos %d\n", i);
+        if (offset == len_byte_offset){
+            bytes_left = byte;
+        }
+
+        if (offset == 0){
+            if (byte != 0xE0){
+                dprintf(RFIDNAME ": Failed to read from serial port: RFID decode failed: Sync failure: %x\n", byte);
                 return HRESULT_FROM_WIN32(ERROR_DATA_CHECKSUM_ERROR);
             }
-            out[offset++] = ebyte + 1;
-            checksum += ebyte + 1;
+            offset++;
+        } else if (byte == 0xD0){
+            escape_flag = true;
         } else {
-            CHECK_OFFSET_BOUNDARY(offset+1, *outlen)
-            out[offset++] = byte;
+            if (escape_flag) {
+                byte += 1;
+                escape_flag = false;
+                bytes_left++;
+            } else if (byte == 0xE0){
+                dprintf(RFIDNAME ": Failed to read from serial port: RFID decode failed: Found unexpected sync byte in stream at pos %d\n", offset);
+                return HRESULT_FROM_WIN32(ERROR_DATA_CHECKSUM_ERROR);
+            }
             checksum += byte;
+            offset++;
         }
+    } while (bytes_left-- > 0);
+
+    hr = serial_read_single_byte(handle, out + offset);
+    if (FAILED(hr)){
+        return hr;
     }
 
-    uint8_t schecksum = in[inlen - 1];
+    uint8_t schecksum = *(out + offset);
+
     if (checksum != schecksum){
+#if CHECKSUM_IS_ERROR
         dprintf(RFIDNAME ": Failed to read from serial port: RFID decode failed: Checksum failed: expected %d, got %d\n", checksum, schecksum);
         return HRESULT_FROM_WIN32(ERROR_DATA_CHECKSUM_ERROR);
+#else
+        dprintf(RFIDNAME ": Decode: WARNING! Checksum mismatch: expected %d, got %d\n", checksum, schecksum);
+#endif
     }
 
-    *outlen = offset;
+#if SUPER_VERBOSE
+    dprintf(RFIDNAME": Data received from serial (%d):\n", offset);
+    dump(out, offset);
+#endif
+
+    // strip sync and checksum byte from response
+    *outlen = offset - 2;
+    memcpy(out, out + 1, *outlen);
 
     return S_OK;
 }
@@ -208,7 +236,7 @@ HRESULT rfid_transact(uint16_t packet, const uint8_t *payload, uint32_t payload_
         dprintf_sv(RFIDNAME ": Send OK (%ld/%d)\n", send_written, comm_buf_size);
     }
 
-    comm_buf_size = COMM_BUF_SIZE;
+    /*comm_buf_size = COMM_BUF_SIZE;
     uint8_t comm_in[COMM_BUF_SIZE];
 
     DWORD frame_len = 0;
@@ -226,17 +254,26 @@ HRESULT rfid_transact(uint16_t packet, const uint8_t *payload, uint32_t payload_
     dprintf_sv(RFIDNAME ": Header Read OK (%ld/4)\n", frame_len);
 
     DWORD frame_payload_len = comm_in[3] + 1;
-    if (!ReadFile(hSerial, (uint8_t*)(&comm_in) + 4, frame_payload_len, &frame_payload_len, NULL)){
+    DWORD frame_payload_read = 0;
+    if (!ReadFile(hSerial, (uint8_t*)(&comm_in) + 4, frame_payload_len, &frame_payload_read, NULL)){
         uint32_t er = GetLastError();
         dprintf(RFIDNAME ": Failed to read from serial port: %u\n", er);
         return HRESULT_FROM_WIN32(er);
+    }
+
+    dprintf_sv(RFIDNAME ": Read OK (%ld/%ld)\n", frame_payload_len, frame_payload_read);
+
+    if (*response_len == 0){
+        *response_len = COMM_BUF_SIZE;
     }
 
     hr = rfid_decode(comm_in, frame_len + frame_payload_len, response, response_len);
     if (FAILED(hr)){
         dprintf(RFIDNAME ": Failed to decode packet: %ld\n", hr);
         return hr;
-    }
+    }*/
+
+    hr = rfid_decoding_read(hSerial, response, response_len);
 
 #if SUPER_VERBOSE
         dprintf("RECV (%d):\n", *response_len);
@@ -244,6 +281,34 @@ HRESULT rfid_transact(uint16_t packet, const uint8_t *payload, uint32_t payload_
 #endif
 
     return hr;
+}
+
+HRESULT rfid_reset(){
+    dprintf(RFIDNAME ": Reset\n");
+
+    if (hSerial == INVALID_HANDLE_VALUE){
+        return E_HANDLE;
+    }
+
+    HRESULT hr;
+
+    struct rfid_req_any reset_cmd;
+    reset_cmd.cmd = RFID_CMD_RESET;
+    reset_cmd.len = 0;
+
+    struct rfid_resp_any resp_cmd;
+    uint32_t resp_len = sizeof(resp_cmd);
+
+    hr = rfid_transact(RFID_CMD_CARD_SCAN, (uint8_t*) &reset_cmd, 2, (uint8_t *) &resp_cmd, &resp_len);
+
+    if (FAILED(hr)){
+        dprintf(RFIDNAME ": Reset failed, transact failed: %ld\n", hr);
+        return hr;
+    }
+
+    dprintf(RFIDNAME ": Reset: %d\n", resp_cmd.subcmd);
+
+    return S_OK;
 }
 
 HRESULT rfid_get_card_tid(uint8_t *rCardTID){
@@ -277,7 +342,13 @@ HRESULT rfid_get_card_tid(uint8_t *rCardTID){
     int cards_read = 0;
     bool end_read = false;
     do {
+        resp_len = sizeof(resp_cmd);
         hr = rfid_transact(0, NULL, 0, (uint8_t *) &resp_cmd, &resp_len);
+
+        if (FAILED(hr)){
+            dprintf(RFIDNAME ": GetCardTID failed, transact failed: %ld\n", hr);
+            return hr;
+        }
 
         if (resp_cmd.subcmd == RFID_SUBCMD_SCAN_DATA_CARD){
             memcpy(rCardTID, resp_cmd.data, resp_cmd.len);
