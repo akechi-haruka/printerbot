@@ -16,6 +16,9 @@ struct printerbot_config {
     char main_fw_path[MAX_PATH];
     char param_fw_path[MAX_PATH];
 
+    int rfid_port;
+    int rfid_baud;
+
     int imagemode;
     int from_width;
     int from_height;

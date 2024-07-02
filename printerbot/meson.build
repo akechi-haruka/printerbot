@@ -10,6 +10,8 @@ printerbot_lib = static_library(
     ],
     sources : [
         'config.c',
-        'config.h'
+        'config.h',
+        'rfid-board.c',
+        'rfid-board.h'
     ],
 )

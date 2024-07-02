@@ -42,7 +42,7 @@ void chcusb330_shim_install(struct printerbot_config *cfg) {
     shim[count++] = GetProcAddress(ptr, "chcusb_imageformat");
     for (int i = 0; i < count; i++) {
         if (shim[i] == NULL) {
-            dprintf(NAME "NON-IMPORTED FUNCTION AT INDEX %d!!\n", i);
+            dprintf(NAME ": NON-IMPORTED FUNCTION AT INDEX %d!!\n", i);
         }
     }
     dprintf(NAME ": Shimmed %d functions\n", count);

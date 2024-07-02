@@ -10,8 +10,11 @@
 #define SUPER_VERBOSE 1
 #include "util/dprintf.h"
 #include "util/brickprotect.h"
+#include "printerbot/rfid-board.h"
 
 #define MAX_SHIM_COUNT 255
+#define ERROR_RFID_FAIL 4051
+#define ERROR_RFID_OK 2405
 
 static FARPROC shim[MAX_SHIM_COUNT];
 static struct printerbot_config config;
@@ -33,6 +36,13 @@ typedef int (*ogchcusb_open)(uint16_t *rResult);
 int chcusb_open(uint16_t *rResult) {
     dprintf_sv(NAME ": %s\n", __func__);
     int ret = ((ogchcusb_open) shim[1])(rResult);
+
+    if (ret == 1 && *rResult == 0){
+        if (FAILED(rfid_connect(config.rfid_port, config.rfid_baud))){
+            *rResult = ERROR_RFID_FAIL;
+        }
+    }
+
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
     return ret;
 }
@@ -43,6 +53,8 @@ typedef void (*ogchcusb_close)();
 void chcusb_close() {
     dprintf_sv(NAME ": %s\n", __func__);
     ((ogchcusb_close) shim[2])();
+
+    rfid_close();
 }
 
 
@@ -207,6 +219,9 @@ int chcusb_write(uint8_t *data, uint32_t *writeSize, uint16_t *rResult) {
 
     int ret = ((ogchcusb_write) shim[18])(resized, writeSize, rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
+
+    free(resized);
+
     return ret;
 }
 
@@ -234,6 +249,9 @@ int chcusb_writeHolo(uint8_t *data, uint32_t *writeSize, uint16_t *rResult) {
 
     int ret = ((ogchcusb_writeHolo) shim[20])(resized, writeSize, rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
+
+    free(resized);
+
     return ret;
 }
 
@@ -383,11 +401,16 @@ typedef int (*ogchcusb_commCardRfidReader)(uint8_t *sendData, uint8_t *rRecvData
 
 int chcusb_commCardRfidReader(uint8_t *sendData, uint8_t *rRecvData, uint32_t sendSize, uint32_t *rRecvSize,
                               uint16_t *rResult) {
-    // TODO
     dprintf_sv(NAME ": %s(%d, %p, %d, %p, %p)\n", __func__, sendData[0], rRecvData, sendSize, rRecvSize, rResult);
-    int ret = ((ogchcusb_commCardRfidReader) shim[35])(sendData, rRecvData, sendSize, rRecvSize, rResult);
+
+    if (FAILED(rfid_transact(((uint16_t*)sendData)[0], sendData, sendSize, rRecvData, rRecvSize))){
+        *rResult = ERROR_RFID_FAIL;
+    } else {
+        *rResult = 0;
+    }
+
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
-    return ret;
+    return 1;
 }
 
 
@@ -587,7 +610,7 @@ void chcusb_shim_install(struct printerbot_config *cfg) {
     shim[count++] = GetProcAddress(ptr, "chcusb_writeIred");
     for (int i = 0; i < count; i++) {
         if (shim[i] == NULL) {
-            dprintf(NAME "NON-IMPORTED FUNCTION AT INDEX %d!!\n", i);
+            dprintf(NAME ": NON-IMPORTED FUNCTION AT INDEX %d!!\n", i);
         }
     }
     dprintf(NAME ": Shimmed %d functions\n", count);
