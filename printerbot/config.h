@@ -12,7 +12,6 @@ struct printerbot_config {
     int from;
     int to;
 
-    int allow_firmware_write;
     char main_fw_path[MAX_PATH];
     char param_fw_path[MAX_PATH];
 
@@ -24,6 +23,9 @@ struct printerbot_config {
     int from_height;
     int to_width;
     int to_height;
+
+    int allow_firmware_write;
+    int data_manipulation;
 };
 
 void printerbot_config_load(

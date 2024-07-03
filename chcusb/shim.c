@@ -209,7 +209,7 @@ typedef int (*ogchcusb_startpage)(uint16_t postCardState, uint16_t *pageId, uint
 int chcusb_startpage(uint16_t postCardState, uint16_t *pageId, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d, %d)\n", __func__, postCardState, *pageId);
 
-    if (config.to == 330 && postCardState == 1){
+    if (config.to == 330 && postCardState == 1 && config.data_manipulation){
         dprintf_sv(NAME ": Convert postCardState to 3\n");
         postCardState = 3;
     }
@@ -309,7 +309,7 @@ int chcusb_setPrinterInfo(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen, 
     dump(rBuffer, *rLen);
 #endif
 
-    if (tagNumber == 0) { // PAPERINFO
+    if (tagNumber == 0 && config.data_manipulation) { // PAPERINFO
         rBuffer[0] = 0x02; // ???
         rBuffer[1] = config.to_width;
         rBuffer[2] = config.to_width >> 8;
