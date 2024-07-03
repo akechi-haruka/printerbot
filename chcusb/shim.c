@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <util/imagemanipulation.h>
 #include <util/dump.h>
+#include <util/loadlibrary.h>
 #include "chcusb/shim.h"
 #include "printerbot/config.h"
 #define SUPER_VERBOSE 1
@@ -14,8 +15,6 @@
 #include "printerbot/rfid-board.h"
 
 #define MAX_SHIM_COUNT 255
-#define ERROR_RFID_FAIL 4051
-#define ERROR_RFID_OK 2405
 
 static FARPROC shim[MAX_SHIM_COUNT];
 static struct printerbot_config config;
@@ -39,9 +38,11 @@ int chcusb_open(uint16_t *rResult) {
     int ret = ((ogchcusb_open) shim[1])(rResult);
 
     if (ret == 1 && *rResult == 0){
-        rfid_close();
-        if (FAILED(rfid_connect(config.rfid_port, config.rfid_baud))){
-            *rResult = ERROR_RFID_FAIL;
+        if (config.rfid_port > 0) {
+            rfid_close();
+            if (FAILED(rfid_connect(config.rfid_port, config.rfid_baud))) {
+                *rResult = ERROR_RFID_FAIL;
+            }
         }
     }
 
@@ -56,7 +57,9 @@ void chcusb_close() {
     dprintf_sv(NAME ": %s\n", __func__);
     ((ogchcusb_close) shim[2])();
 
-    rfid_close();
+    if (config.rfid_port > 0) {
+        rfid_close();
+    }
 }
 
 
@@ -129,6 +132,8 @@ int chcusb_imageformat_310(uint16_t format, uint16_t ncomp, uint16_t depth, uint
     width = config.to_width;
     height = config.to_height;
 
+    // use correct declaration based on model
+    // TODO: use the parameters passed here instead of config
     int ret;
     if (config.to == 310) {
         ret = ((ogchcusb_imageformat_310) shim[9])(format, ncomp, depth, width, height, inputImage, rResult);
@@ -136,7 +141,7 @@ int chcusb_imageformat_310(uint16_t format, uint16_t ncomp, uint16_t depth, uint
         ret = ((ogchcusb_imageformat_330) shim[9])(format, ncomp, depth, width, height, rResult);
     } else {
         dprintf(NAME ": Unknown target printer: %d\n", config.to);
-        *rResult = 2405;
+        *rResult = ERROR_PRINTER_PARAMETER_ERROR;
         ret = 1;
     }
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
@@ -209,6 +214,7 @@ typedef int (*ogchcusb_startpage)(uint16_t postCardState, uint16_t *pageId, uint
 int chcusb_startpage(uint16_t postCardState, uint16_t *pageId, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d, %d)\n", __func__, postCardState, *pageId);
 
+    // 330 does not know state 1
     if (config.to == 330 && postCardState == 1 && config.data_manipulation){
         dprintf_sv(NAME ": Convert postCardState to 3\n");
         postCardState = 3;
@@ -235,28 +241,43 @@ typedef int (*ogchcusb_write)(uint8_t *data, uint32_t *writeSize, uint16_t *rRes
 int chcusb_write(uint8_t *data, uint32_t *writeSize, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d)\n", __func__, *writeSize);
 
-    uint32_t orig_writeSize = *writeSize;
-    uint32_t len = 0;
-    uint8_t* resized = bicubicresize(data, config.from_width, config.from_height, config.to_width, config.to_height, &len, 3);
-    dprintf(NAME ": Image resized from %d to %d bytes\n", *writeSize, len);
-    *writeSize = len;
+    if (config.from_width == config.to_width && config.from_height == config.to_height){
 
-    uint32_t written = 0;
-    int ret;
-    do {
-        ret = ((ogchcusb_write) shim[18])(resized + written, writeSize, rResult);
-        dprintf_sv(NAME ": %d bytes written to printer\n", *writeSize);
-        written += *writeSize;
+        // if we aren't resizing, just skip everything
+
+        int ret = ((ogchcusb_write) shim[18])(data, writeSize, rResult);
         SUPER_VERBOSE_RESULT_PRINT(*rResult);
-        if (*rResult != 0){
-            return ret;
-        }
-    } while (written < len);
-    *writeSize = orig_writeSize;
+        return ret;
 
-    free(resized);
+    } else {
 
-    return ret;
+        uint32_t orig_writeSize = *writeSize;
+        uint32_t len = 0;
+        uint8_t *resized = bicubicresize(data, config.from_width, config.from_height, config.to_width, config.to_height,
+                                         &len, 3);
+        dprintf(NAME ": Image resized from %d to %d bytes\n", *writeSize, len);
+        *writeSize = len;
+
+        // okay so this is stupid as since the printer buffer may fill, we can't just return the amount of resized bytes since we don't know the relation between written resized bytes and real bytes, plus calling a partial bicubicresize will crash us, so we write the blocks ourselves until the printer has accepted all bytes and return the full amount of real bytes (that we actually didn't write)
+
+        uint32_t written = 0;
+        int ret;
+        do {
+            ret = ((ogchcusb_write) shim[18])(resized + written, writeSize, rResult);
+            dprintf_sv(NAME ": %d bytes written to printer\n", *writeSize);
+            written += *writeSize;
+            SUPER_VERBOSE_RESULT_PRINT(*rResult);
+            if (*rResult != 0) {
+                return ret;
+            }
+        } while (written < len);
+        *writeSize = orig_writeSize;
+
+        free(resized);
+
+        return ret;
+
+    }
 }
 
 
@@ -276,28 +297,43 @@ typedef int (*ogchcusb_writeHolo)(uint8_t *data, uint32_t *writeSize, uint16_t *
 int chcusb_writeHolo(uint8_t *data, uint32_t *writeSize, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d)\n", __func__, *writeSize);
 
-    uint32_t orig_writeSize = *writeSize;
-    uint32_t len = 0;
-    uint8_t* resized = bicubicresize(data, config.from_width, config.from_height, config.to_width, config.to_height, &len, 1);
-    dprintf(NAME ": Image resized from %d to %d bytes\n", *writeSize, len);
-    *writeSize = len;
+    if (config.from_width == config.to_width && config.from_height == config.to_height){
 
-    uint32_t written = 0;
-    int ret;
-    do {
-        ret = ((ogchcusb_write) shim[20])(resized + written, writeSize, rResult);
-        dprintf_sv(NAME ": %d bytes written to printer\n", *writeSize);
-        written += *writeSize;
+        // if we aren't resizing, just skip everything
+
+        int ret = ((ogchcusb_write) shim[20])(data, writeSize, rResult);
         SUPER_VERBOSE_RESULT_PRINT(*rResult);
-        if (*rResult != 0){
-            return ret;
-        }
-    } while (written < len);
-    *writeSize = orig_writeSize;
+        return ret;
 
-    free(resized);
+    } else {
 
-    return ret;
+        uint32_t orig_writeSize = *writeSize;
+        uint32_t len = 0;
+        uint8_t *resized = bicubicresize(data, config.from_width, config.from_height, config.to_width, config.to_height,
+                                         &len, 3);
+        dprintf(NAME ": Image resized from %d to %d bytes\n", *writeSize, len);
+        *writeSize = len;
+
+        // okay so this is stupid as since the printer buffer may fill, we can't just return the amount of resized bytes since we don't know the relation between written resized bytes and real bytes, plus calling a partial bicubicresize will crash us, so we write the blocks ourselves until the printer has accepted all bytes and return the full amount of real bytes (that we actually didn't write)
+
+        uint32_t written = 0;
+        int ret;
+        do {
+            ret = ((ogchcusb_write) shim[20])(resized + written, writeSize, rResult);
+            dprintf_sv(NAME ": %d bytes written to printer\n", *writeSize);
+            written += *writeSize;
+            SUPER_VERBOSE_RESULT_PRINT(*rResult);
+            if (*rResult != 0) {
+                return ret;
+            }
+        } while (written < len);
+        *writeSize = orig_writeSize;
+
+        free(resized);
+
+        return ret;
+
+    }
 }
 
 
@@ -310,6 +346,7 @@ int chcusb_setPrinterInfo(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen, 
 #endif
 
     if (tagNumber == 0 && config.data_manipulation) { // PAPERINFO
+        // FIXME: this should be a struct
         rBuffer[0] = 0x02; // ???
         rBuffer[1] = config.to_width;
         rBuffer[2] = config.to_width >> 8;
@@ -528,7 +565,7 @@ int chcusb_setCutList(uint8_t *rData, uint16_t *rResult) {
 typedef int (*ogchcusb_setLaminatePattern)(uint16_t index, uint8_t *rData, uint16_t *rResult);
 
 int chcusb_setLaminatePattern(uint16_t index, uint8_t *rData, uint16_t *rResult) {
-    // TODO?
+    // TODO CHC320?
     dprintf_sv(NAME ": %s(%d)\n", __func__, index);
     int ret = ((ogchcusb_setLaminatePattern) shim[40])(index, rData, rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
@@ -625,59 +662,54 @@ void chcusb_shim_install(struct printerbot_config *cfg) {
         return;
     }
     int count = 0;
-    shim[count++] = GetProcAddress(ptr, "chcusb_MakeThread");
-    shim[count++] = GetProcAddress(ptr, "chcusb_open");
-    shim[count++] = GetProcAddress(ptr, "chcusb_close");
-    shim[count++] = GetProcAddress(ptr, "chcusb_ReleaseThread");
-    shim[count++] = GetProcAddress(ptr, "chcusb_listupPrinter");
-    shim[count++] = GetProcAddress(ptr, "chcusb_listupPrinterSN");
-    shim[count++] = GetProcAddress(ptr, "chcusb_selectPrinter");
-    shim[count++] = GetProcAddress(ptr, "chcusb_selectPrinterSN");
-    shim[count++] = GetProcAddress(ptr, "chcusb_getPrinterInfo");
-    shim[count++] = GetProcAddress(ptr, "chcusb_imageformat");
-    shim[count++] = GetProcAddress(ptr, "chcusb_setmtf");
-    shim[count++] = GetProcAddress(ptr, "chcusb_makeGamma");
-    shim[count++] = GetProcAddress(ptr, "chcusb_setIcctable");
-    shim[count++] = GetProcAddress(ptr, "chcusb_copies");
-    shim[count++] = GetProcAddress(ptr, "chcusb_status");
-    shim[count++] = GetProcAddress(ptr, "chcusb_statusAll");
-    shim[count++] = GetProcAddress(ptr, "chcusb_startpage");
-    shim[count++] = GetProcAddress(ptr, "chcusb_endpage");
-    shim[count++] = GetProcAddress(ptr, "chcusb_write");
-    shim[count++] = GetProcAddress(ptr, "chcusb_writeLaminate");
-    shim[count++] = GetProcAddress(ptr, "chcusb_writeHolo");
-    shim[count++] = GetProcAddress(ptr, "chcusb_setPrinterInfo");
-    shim[count++] = GetProcAddress(ptr, "chcusb_getGamma");
-    shim[count++] = GetProcAddress(ptr, "chcusb_getMtf");
-    shim[count++] = GetProcAddress(ptr, "chcusb_cancelCopies");
-    shim[count++] = GetProcAddress(ptr, "chcusb_setPrinterToneCurve");
-    shim[count++] = GetProcAddress(ptr, "chcusb_getPrinterToneCurve");
-    shim[count++] = GetProcAddress(ptr, "chcusb_blinkLED");
-    shim[count++] = GetProcAddress(ptr, "chcusb_resetPrinter");
-    shim[count++] = GetProcAddress(ptr, "chcusb_AttachThreadCount");
-    shim[count++] = GetProcAddress(ptr, "chcusb_getPrintIDStatus");
-    shim[count++] = GetProcAddress(ptr, "chcusb_setPrintStandby");
-    shim[count++] = GetProcAddress(ptr, "chcusb_testCardFeed");
-    shim[count++] = GetProcAddress(ptr, "chcusb_exitCard");
-    shim[count++] = GetProcAddress(ptr, "chcusb_getCardRfidTID");
-    shim[count++] = GetProcAddress(ptr, "chcusb_commCardRfidReader");
-    shim[count++] = GetProcAddress(ptr, "chcusb_updateCardRfidReader");
-    shim[count++] = GetProcAddress(ptr, "chcusb_getErrorLog");
-    shim[count++] = GetProcAddress(ptr, "chcusb_getErrorStatus");
-    shim[count++] = GetProcAddress(ptr, "chcusb_setCutList");
-    shim[count++] = GetProcAddress(ptr, "chcusb_setLaminatePattern");
-    shim[count++] = GetProcAddress(ptr, "chcusb_color_adjustment");
-    shim[count++] = GetProcAddress(ptr, "chcusb_color_adjustmentEx");
-    shim[count++] = GetProcAddress(ptr, "chcusb_getEEPROM");
-    shim[count++] = GetProcAddress(ptr, "chcusb_setParameter");
-    shim[count++] = GetProcAddress(ptr, "chcusb_getParameter");
-    shim[count++] = GetProcAddress(ptr, "chcusb_universal_command");
-    shim[count++] = GetProcAddress(ptr, "chcusb_writeIred");
-    for (int i = 0; i < count; i++) {
-        if (shim[i] == NULL) {
-            dprintf(NAME ": NON-IMPORTED FUNCTION AT INDEX %d!!\n", i);
-        }
-    }
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_MakeThread");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_open");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_close");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_ReleaseThread");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_listupPrinter");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_listupPrinterSN");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_selectPrinter");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_selectPrinterSN");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_getPrinterInfo");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_imageformat");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_setmtf");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_makeGamma");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_setIcctable");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_copies");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_status");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_statusAll");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_startpage");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_endpage");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_write");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_writeLaminate");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_writeHolo");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_setPrinterInfo");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_getGamma");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_getMtf");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_cancelCopies");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_setPrinterToneCurve");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_getPrinterToneCurve");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_blinkLED");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_resetPrinter");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_AttachThreadCount");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_getPrintIDStatus");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_setPrintStandby");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_testCardFeed");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_exitCard");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_getCardRfidTID");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_commCardRfidReader");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_updateCardRfidReader");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_getErrorLog");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_getErrorStatus");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_setCutList");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_setLaminatePattern");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_color_adjustment");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_color_adjustmentEx");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_getEEPROM");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_setParameter");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_getParameter");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_universal_command");
+    shim[count++] = GetProcAddressChecked(ptr, "chcusb_writeIred");
     dprintf(NAME ": Shimmed %d functions\n", count);
 
     // Load firmware if has previously been written to

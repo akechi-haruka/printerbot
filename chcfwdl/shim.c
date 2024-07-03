@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <assert.h>
 #include <stdio.h>
+#include <util/loadlibrary.h>
 
 #include "chcfwdl/shim.h"
 
@@ -445,27 +446,22 @@ void chcfwdl_shim_install(struct printerbot_config *cfg) {
         return;
     }
     int count = 0;
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_open");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_close");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_listupPrinter");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_listupPrinterSN");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_selectPrinter");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_selectPrinterSN");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_getPrinterInfo");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_status");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_statusAll");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_resetPrinter");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_updateFirmware");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_getFirmwareInfo");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_MakeThread");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_ReleaseThread");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_AttachThreadCount");
-    shim[count++] = GetProcAddress(ptr, "fwdlusb_getErrorLog");
-    for (int i = 0; i < count; i++) {
-        if (shim[i] == NULL) {
-            dprintf(NAME ": NON-IMPORTED FUNCTION AT INDEX %d!!\n", i);
-        }
-    }
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_open");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_close");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_listupPrinter");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_listupPrinterSN");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_selectPrinter");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_selectPrinterSN");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_getPrinterInfo");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_status");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_statusAll");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_resetPrinter");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_updateFirmware");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_getFirmwareInfo");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_MakeThread");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_ReleaseThread");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_AttachThreadCount");
+    shim[count++] = GetProcAddressChecked(ptr, "fwdlusb_getErrorLog");
     dprintf(NAME ": Shimmed %d functions\n", count);
 
     // Load firmware if has previously been written to

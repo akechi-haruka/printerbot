@@ -14,5 +14,7 @@ util_lib = static_library(
         'dump.h',
         'imagemanipulation.c',
         'imagemanipulation.h',
+        'loadlibrary.c',
+        'loadlibrary.h',
     ],
 )
