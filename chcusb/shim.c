@@ -123,14 +123,17 @@ typedef int (*ogchcusb_getPrinterInfo)(uint16_t tagNumber, uint8_t *rBuffer, uin
 
 int chcusb_getPrinterInfo(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen) {
     dprintf_sv(NAME ": %s(%d, %d)\n", __func__, tagNumber, *rLen);
-    int ret = ((ogchcusb_getPrinterInfo) shim[8])(tagNumber, rBuffer, rLen);
+    int ret = 1;
 
     if (tagNumber == kPINFTAG_PRINTSTANDBY) {
 
         // FIXME?: I REALLY REALLY REALLY REALLY do not like this at all, but do more cards need to be sacrificed?
         // Like I don't know why the 310 has this weird status flag... Neither do I know what the deal with the 330's "1007" status is as I can't find that anywhere else...
-        if (config.data_manipulation && config.from == 310 && page_started && rBuffer[0] == 0x03 && printid_status > 2212){
-            if (counter_for_31-- > 0){
+        if (config.data_manipulation && config.from == 310 && page_started && printid_status > 2212){
+            dprintf(NAME ": Querying real standby status...\n");
+            ret = ((ogchcusb_getPrinterInfo) shim[8])(tagNumber, rBuffer, rLen);
+            dprintf(NAME ": OK (%d)\n", rBuffer[0]);
+            if (rBuffer[0] == 0x03 && counter_for_31-- > 0){
                 dprintf(NAME ": Setting 0x31 flag\n");
                 rBuffer[0] = 0x31;
             } else {
@@ -138,6 +141,8 @@ int chcusb_getPrinterInfo(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen) 
                 rBuffer[0] = 0x00;
             }
         }
+    } else {
+        ret = ((ogchcusb_getPrinterInfo) shim[8])(tagNumber, rBuffer, rLen);
     }
 
 #if SUPER_VERBOSE
@@ -395,11 +400,29 @@ int chcusb_setPrinterInfo(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen, 
         rBuffer[3] = config.to_height;
         rBuffer[4] = config.to_height >> 8;
     } else if (tagNumber == 20 && config.data_manipulation) { // POLISHINFO
+        uint8_t byte = rBuffer[0];
         // this controls holo printing somehow?
         if (config.to == 310) {
-            rBuffer[0] = 0x05;
+            // 310, 0x05=holo, 0x02=normal
+            if (byte == 0x11 || byte == 0x15) {
+                rBuffer[0] = 0x05;
+            } else if (byte == 0x02 || byte == 0x12){
+                rBuffer[0] = 0x02;
+            }
+        } else if (config.to == 320) {
+            // 320, 0x15=holo, 0x12=normal
+            if (byte == 0x11 || byte == 0x05) {
+                rBuffer[0] = 0x15;
+            } else if (byte == 0x02){
+                rBuffer[0] = 0x12;
+            }
         } else if (config.to == 330) {
-            rBuffer[0] = 0x11;
+            // 330, 0x11=holo, 0x02=normal
+            if (byte == 0x05 || byte == 0x15){
+                rBuffer[0] = 0x11;
+            } else if (byte == 0x02 || byte == 0x12){
+                rBuffer[0] = 0x02;
+            }
         }
     }
 
