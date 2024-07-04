@@ -15,6 +15,8 @@ static bool initialized = false;
 
 BOOL WINAPI DllMain(HMODULE mod, DWORD cause, void *ctx) {
 
+    // main dll is implicitely initialized
+
     if (cause != DLL_PROCESS_ATTACH) {
         return TRUE;
     }
@@ -33,7 +35,6 @@ BOOL WINAPI DllMain(HMODULE mod, DWORD cause, void *ctx) {
         return TRUE;
     }
 
-    chcusb_shim_install(&cfg);
     chcusb330_shim_install(&cfg);
 
     dprintf(NAME ": roll out!\n");

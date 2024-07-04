@@ -31,9 +31,9 @@ int chcusb_imageformat_330(uint16_t format, uint16_t ncomp, uint16_t depth, uint
     int ret;
     if (config.to == 310) {
         // TODO: where do we get this parameter from, is this just image pixels??
-        ret = ((ogchcusb_imageformat_310) shim[9])(format, ncomp, depth, width, height, NULL, rResult);
+        ret = ((ogchcusb_imageformat_310) shim[0])(format, ncomp, depth, width, height, NULL, rResult);
     } else if (config.to == 330){
-        ret = ((ogchcusb_imageformat_330) shim[9])(format, ncomp, depth, width, height, rResult);
+        ret = ((ogchcusb_imageformat_330) shim[0])(format, ncomp, depth, width, height, rResult);
     } else {
         dprintf(NAME ": Unknown target printer: %d\n", config.to);
         *rResult = 2405;
@@ -50,7 +50,11 @@ void chcusb330_shim_install(struct printerbot_config *cfg) {
     memcpy(&config, cfg, sizeof(*cfg));
 
     char path[MAX_PATH];
-    sprintf(path, ".\\C%dAusb.dll", cfg->to);
+    if (cfg->from == cfg->to){
+        sprintf(path, ".\\C%dAusb_orig.dll", cfg->to);
+    } else {
+        sprintf(path, ".\\C%dAusb.dll", cfg->to);
+    }
     HINSTANCE ptr = LoadLibraryA(path);
     if (ptr == NULL) {
         dprintf("LoadLibrary(%s) FAILED: %ld\n", path, GetLastError());

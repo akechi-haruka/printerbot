@@ -9,7 +9,9 @@
 #include <util/loadlibrary.h>
 #include "chcusb/shim.h"
 #include "printerbot/config.h"
+
 #define SUPER_VERBOSE 1
+
 #include "util/dprintf.h"
 #include "util/brickprotect.h"
 #include "printerbot/rfid-board.h"
@@ -21,6 +23,12 @@ static struct printerbot_config config;
 
 static uint8_t mainFirmware[0x40] = {0};
 static uint8_t paramFirmware[0x40] = {0};
+
+static int printid_status = 0;
+
+// dragons
+static int counter_for_31 = 0;
+static bool page_started = false;
 
 typedef int (*ogchcusb_MakeThread)(uint16_t maxCount);
 
@@ -37,7 +45,7 @@ int chcusb_open(uint16_t *rResult) {
     dprintf_sv(NAME ": %s\n", __func__);
     int ret = ((ogchcusb_open) shim[1])(rResult);
 
-    if (ret == 1 && *rResult == 0){
+    if (ret == 1 && *rResult == 0) {
         if (config.rfid_port > 0) {
             rfid_close();
             if (FAILED(rfid_connect(config.rfid_port, config.rfid_baud))) {
@@ -116,13 +124,33 @@ typedef int (*ogchcusb_getPrinterInfo)(uint16_t tagNumber, uint8_t *rBuffer, uin
 int chcusb_getPrinterInfo(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen) {
     dprintf_sv(NAME ": %s(%d, %d)\n", __func__, tagNumber, *rLen);
     int ret = ((ogchcusb_getPrinterInfo) shim[8])(tagNumber, rBuffer, rLen);
+
+    if (tagNumber == kPINFTAG_PRINTSTANDBY) {
+
+        // FIXME?: I REALLY REALLY REALLY REALLY do not like this at all, but do more cards need to be sacrificed?
+        // Like I don't know why the 310 has this weird status flag... Neither do I know what the deal with the 330's "1007" status is as I can't find that anywhere else...
+        if (config.data_manipulation && config.from == 310 && page_started && rBuffer[0] == 0x03 && printid_status > 2212){
+            if (counter_for_31-- > 0){
+                dprintf(NAME ": Setting 0x31 flag\n");
+                rBuffer[0] = 0x31;
+            } else {
+                dprintf(NAME ": Setting 0x00 flag\n");
+                rBuffer[0] = 0x00;
+            }
+        }
+    }
+
+#if SUPER_VERBOSE
+    dump(rBuffer, *rLen);
+#endif
     return ret;
 }
 
 typedef int (*ogchcusb_imageformat_310)(uint16_t format, uint16_t ncomp, uint16_t depth, uint16_t width,
                                         uint16_t height, uint8_t *inputImage, uint16_t *rResult);
 
-typedef int (*ogchcusb_imageformat_330)(uint16_t format, uint16_t ncomp, uint16_t depth, uint16_t width, uint16_t height, uint16_t *rResult);
+typedef int (*ogchcusb_imageformat_330)(uint16_t format, uint16_t ncomp, uint16_t depth, uint16_t width,
+                                        uint16_t height, uint16_t *rResult);
 
 
 int chcusb_imageformat_310(uint16_t format, uint16_t ncomp, uint16_t depth, uint16_t width, uint16_t height,
@@ -137,7 +165,7 @@ int chcusb_imageformat_310(uint16_t format, uint16_t ncomp, uint16_t depth, uint
     int ret;
     if (config.to == 310) {
         ret = ((ogchcusb_imageformat_310) shim[9])(format, ncomp, depth, width, height, inputImage, rResult);
-    } else if (config.to == 330){
+    } else if (config.to == 330) {
         ret = ((ogchcusb_imageformat_330) shim[9])(format, ncomp, depth, width, height, rResult);
     } else {
         dprintf(NAME ": Unknown target printer: %d\n", config.to);
@@ -187,6 +215,9 @@ int chcusb_copies(uint16_t copies, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d)\n", __func__, copies);
     int ret = ((ogchcusb_copies) shim[13])(copies, rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
+
+    page_started = false;
+
     return ret;
 }
 
@@ -196,6 +227,14 @@ typedef int (*ogchcusb_status)(uint16_t *rResult);
 int chcusb_status(uint16_t *rResult) {
     dprintf_sv(NAME ": %s\n", __func__);
     int ret = ((ogchcusb_status) shim[14])(rResult);
+
+    // FIXME: I really don't like this either!
+    if (config.data_manipulation && config.from == 310 && page_started && printid_status > 2212 && *rResult == 1007){
+        dprintf(NAME ": Setting status to 0\n");
+        *rResult = 0;
+        ret = 1;
+    }
+
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
     return ret;
 }
@@ -215,10 +254,13 @@ int chcusb_startpage(uint16_t postCardState, uint16_t *pageId, uint16_t *rResult
     dprintf_sv(NAME ": %s(%d, %d)\n", __func__, postCardState, *pageId);
 
     // 330 does not know state 1
-    if (config.to == 330 && postCardState == 1 && config.data_manipulation){
-        dprintf_sv(NAME ": Convert postCardState to 3\n");
+    if (config.to == 330 && postCardState == 1 && config.data_manipulation) {
         postCardState = 3;
+        dprintf_sv(NAME ": Convert postCardState to %d\n", postCardState);
     }
+
+    page_started = true;
+    counter_for_31 = 3;
 
     int ret = ((ogchcusb_startpage) shim[16])(postCardState, pageId, rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
@@ -241,7 +283,7 @@ typedef int (*ogchcusb_write)(uint8_t *data, uint32_t *writeSize, uint16_t *rRes
 int chcusb_write(uint8_t *data, uint32_t *writeSize, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d)\n", __func__, *writeSize);
 
-    if (config.from_width == config.to_width && config.from_height == config.to_height){
+    if (config.from_width == config.to_width && config.from_height == config.to_height) {
 
         // if we aren't resizing, just skip everything
 
@@ -297,7 +339,7 @@ typedef int (*ogchcusb_writeHolo)(uint8_t *data, uint32_t *writeSize, uint16_t *
 int chcusb_writeHolo(uint8_t *data, uint32_t *writeSize, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d)\n", __func__, *writeSize);
 
-    if (config.from_width == config.to_width && config.from_height == config.to_height){
+    if (config.from_width == config.to_width && config.from_height == config.to_height) {
 
         // if we aren't resizing, just skip everything
 
@@ -310,7 +352,7 @@ int chcusb_writeHolo(uint8_t *data, uint32_t *writeSize, uint16_t *rResult) {
         uint32_t orig_writeSize = *writeSize;
         uint32_t len = 0;
         uint8_t *resized = bicubicresize(data, config.from_width, config.from_height, config.to_width, config.to_height,
-                                         &len, 3);
+                                         &len, 1);
         dprintf(NAME ": Image resized from %d to %d bytes\n", *writeSize, len);
         *writeSize = len;
 
@@ -352,6 +394,13 @@ int chcusb_setPrinterInfo(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen, 
         rBuffer[2] = config.to_width >> 8;
         rBuffer[3] = config.to_height;
         rBuffer[4] = config.to_height >> 8;
+    } else if (tagNumber == 20 && config.data_manipulation) { // POLISHINFO
+        // this controls holo printing somehow?
+        if (config.to == 310) {
+            rBuffer[0] = 0x05;
+        } else if (config.to == 330) {
+            rBuffer[0] = 0x11;
+        }
     }
 
     int ret = ((ogchcusb_setPrinterInfo) shim[21])(tagNumber, rBuffer, rLen, rResult);
@@ -446,8 +495,11 @@ int chcusb_getPrintIDStatus(uint16_t pageId, uint8_t *rBuffer, uint16_t *rResult
     int ret = ((ogchcusb_getPrintIDStatus) shim[30])(pageId, rBuffer, rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
 #if SUPER_VERBOSE
-    dump(rBuffer, 14);
+    dump(rBuffer, 8);
 #endif
+
+    printid_status = (rResult[7] << 8) | rResult[6];
+
     return ret;
 }
 
@@ -458,6 +510,9 @@ int chcusb_setPrintStandby(uint16_t position, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d)\n", __func__, position);
     int ret = ((ogchcusb_setPrintStandby) shim[31])(position, rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
+
+    page_started = false;
+
     return ret;
 }
 
@@ -478,6 +533,9 @@ int chcusb_exitCard(uint16_t *rResult) {
     dprintf_sv(NAME ": %s\n", __func__);
     int ret = ((ogchcusb_exitCard) shim[33])(rResult);
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
+
+    page_started = false;
+
     return ret;
 }
 
@@ -487,14 +545,21 @@ typedef int (*ogchcusb_getCardRfidTID)(uint8_t *rCardTID, uint16_t *rResult);
 int chcusb_getCardRfidTID(uint8_t *rCardTID, uint16_t *rResult) {
     dprintf_sv(NAME ": %s\n", __func__);
 
-    if (FAILED(rfid_get_card_tid(rCardTID))){
-        *rResult = ERROR_RFID_FAIL;
+    int ret = 1;
+    if (config.rfid_port > 0) {
+        if (FAILED(rfid_get_card_tid(rCardTID))) {
+            *rResult = ERROR_RFID_FAIL;
+        } else {
+            *rResult = ERROR_RFID_OK;
+        }
     } else {
-        *rResult = ERROR_RFID_OK;
+        ret = ((ogchcusb_getCardRfidTID) shim[34])(rCardTID, rResult);
+        dprintf(NAME ": Card TID from Printer:\n");
+        dump(rCardTID, CARD_ID_LEN);
     }
 
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
-    return 1;
+    return ret;
 }
 
 
@@ -505,14 +570,24 @@ int chcusb_commCardRfidReader(uint8_t *sendData, uint8_t *rRecvData, uint32_t se
                               uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d, %p, %d, %p, %p)\n", __func__, sendData[0], rRecvData, sendSize, rRecvSize, rResult);
 
-    if (FAILED(rfid_transact(((uint16_t*)sendData)[0], sendData, sendSize, rRecvData, rRecvSize))){
-        *rResult = ERROR_RFID_FAIL;
+    int ret = 1;
+    if (config.rfid_port > 0) {
+        if (FAILED(rfid_transact(((uint16_t *) sendData)[0], sendData, sendSize, rRecvData, rRecvSize))) {
+            *rResult = ERROR_RFID_FAIL;
+        } else {
+            *rResult = 0;
+        }
+
     } else {
-        *rResult = 0;
+        dprintf("SEND (%d):\n", sendSize);
+        dump(sendData, sendSize);
+        ret = ((ogchcusb_commCardRfidReader) shim[35])(sendData, rRecvData, sendSize, rRecvSize, rResult);
+        dprintf("RECV (%d):\n", *rRecvSize);
+        dump(rRecvData, *rRecvSize);
     }
 
     SUPER_VERBOSE_RESULT_PRINT(*rResult);
-    return 1;
+    return ret;
 }
 
 
@@ -654,7 +729,11 @@ void chcusb_shim_install(struct printerbot_config *cfg) {
     memcpy(&config, cfg, sizeof(*cfg));
 
     char path[MAX_PATH];
-    sprintf(path, ".\\C%dAusb.dll", cfg->to);
+    if (cfg->from == cfg->to) {
+        sprintf(path, ".\\C%dAusb_orig.dll", cfg->to);
+    } else {
+        sprintf(path, ".\\C%dAusb.dll", cfg->to);
+    }
     HINSTANCE ptr = LoadLibraryA(path);
     if (ptr == NULL) {
         dprintf("LoadLibrary(%s) FAILED: %ld\n", path, GetLastError());

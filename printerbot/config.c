@@ -37,7 +37,7 @@ void printerbot_config_load(
     cfg->from_height = GetPrivateProfileIntA("printerbot", "from_height", 0, filename);
     cfg->to_width = GetPrivateProfileIntA("printerbot", "to_width", 0, filename);
     cfg->to_height = GetPrivateProfileIntA("printerbot", "to_height", 0, filename);
-    cfg->rfid_port = GetPrivateProfileIntA("printerbot", "rfid_board", 4, filename);
+    cfg->rfid_port = GetPrivateProfileIntA("printerbot", "rfid_port", 4, filename);
     cfg->rfid_baud = GetPrivateProfileIntA("printerbot", "rfid_baud", 115200, filename);
     cfg->data_manipulation = GetPrivateProfileIntA("printerbot", "data_manipulation", 1, filename);
 

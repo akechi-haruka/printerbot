@@ -292,8 +292,9 @@ int fwdlusb_getFirmwareInfo_main(LPCSTR filename, uint8_t *rBuffer, uint32_t *rL
     if (filename) {
         HANDLE hFile = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
                                    NULL);
-        if (hFile == INVALID_HANDLE_VALUE) return 0;
+        if (hFile == INVALID_HANDLE_VALUE)
         {
+            dprintf(NAME ": File open failed: %ld\n", GetLastError());
             if (rResult) *rResult = 1005;
             SUPER_VERBOSE_RESULT_PRINT(*rResult);
             result = 0;
@@ -314,6 +315,7 @@ int fwdlusb_getFirmwareInfo_main(LPCSTR filename, uint8_t *rBuffer, uint32_t *rL
             SUPER_VERBOSE_RESULT_PRINT(*rResult);
             result = 1;
         } else {
+            dprintf(NAME ": File read failed\n");
             if (rResult) *rResult = 1005;
             SUPER_VERBOSE_RESULT_PRINT(*rResult);
             result = 0;
@@ -333,8 +335,9 @@ int fwdlusb_getFirmwareInfo_param(LPCSTR filename, uint8_t *rBuffer, uint32_t *r
     if (filename) {
         HANDLE hFile = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
                                    NULL);
-        if (hFile == INVALID_HANDLE_VALUE) return 0;
+        if (hFile == INVALID_HANDLE_VALUE)
         {
+            dprintf(NAME ": File open failed: %ld\n", GetLastError());
             if (rResult) *rResult = 1005;
             SUPER_VERBOSE_RESULT_PRINT(*rResult);
             result = 0;
@@ -355,6 +358,7 @@ int fwdlusb_getFirmwareInfo_param(LPCSTR filename, uint8_t *rBuffer, uint32_t *r
             SUPER_VERBOSE_RESULT_PRINT(*rResult);
             result = 1;
         } else {
+            dprintf(NAME ": File read failed\n");
             if (rResult) *rResult = 1005;
             SUPER_VERBOSE_RESULT_PRINT(*rResult);
             result = 0;
@@ -438,7 +442,11 @@ void chcfwdl_shim_install(struct printerbot_config *cfg) {
     memcpy(&config, cfg, sizeof(*cfg));
 
     char path[MAX_PATH];
-    sprintf(path, ".\\C%dAFWDLusb.dll", cfg->to);
+    if (cfg->from == cfg->to){
+        sprintf(path, ".\\C%dAFWDLusb_orig.dll", cfg->to);
+    } else {
+        sprintf(path, ".\\C%dAFWDLusb.dll", cfg->to);
+    }
     HINSTANCE ptr = LoadLibraryA(path);
     if (ptr == NULL) {
         dprintf("LoadLibrary(%s) FAILED: %ld\n", path, GetLastError());
