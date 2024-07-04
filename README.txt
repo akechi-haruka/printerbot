@@ -23,3 +23,9 @@ Note: Firmware updating is blocked.
 have msys2 installed at the default location and run compile.bat
 
 or use CLion
+
+--- Other ---
+
+In memory of all servants and nice boats that wanted to be, but sacrificed themselves for the greater good of this project.
+
+https://puu.sh/Kaf2x/6cb4e0e239.jpg
