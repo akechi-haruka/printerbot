@@ -3,9 +3,15 @@ CHC-series shim DLL to convert between printers
 2024 Haruka
 Licensed under the GPLv3.
 
-Tested on CHC310->330.
-
 Note: Firmware updating is blocked.
+Note: Cards WILL be stretched, simply because the cards between printers are different size. (A bicubic filter is used.)
+
+Tested with:
+CHC-310 -> CHC-310
+CHC-310 -> CHC-310
+CHC-320 -> CHC-330
+CHC-330 -> CHC-310
+CHC-330 -> CHC-330
 
 --- Usage ---
 
