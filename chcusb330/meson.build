@@ -7,14 +7,13 @@ chcusb330 = shared_library(
     vs_module_defs : 'exports.def',
     link_with : [
         util_lib,
-        printerbot_lib,
-        chcusb,
+        printerbot_lib
     ],
     dependencies : [
     ],
     sources : [
-        'dllmain.c',
-        'shim.c',
-        'shim.h',
+        '../chcusb/dllmain.c',
+        '../chcusb/shim.c',
+        '../chcusb/shim.h',
     ],
 )

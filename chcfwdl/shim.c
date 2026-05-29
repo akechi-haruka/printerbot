@@ -23,7 +23,7 @@ static struct printerbot_config config;
 static uint8_t mainFirmware[0x40] = {0};
 static uint8_t paramFirmware[0x40] = {0};
 
-typedef int (*ogfwdlusb_open)(uint16_t *);
+typedef int (__stdcall *ogfwdlusb_open)(uint16_t *);
 
 int fwdlusb_open(uint16_t *rResult) {
     dprintf_sv(NAME ": %s\n", __func__);
@@ -39,7 +39,7 @@ void fwdlusb_close() {
     ((ogfwdlusb_close) shim[1])();
 }
 
-typedef int (*ogfwdlusb_listupPrinter)(uint8_t *rIdArray);
+typedef int (__stdcall *ogfwdlusb_listupPrinter)(uint8_t *rIdArray);
 
 int fwdlusb_listupPrinter(uint8_t *rIdArray) {
     dprintf_sv(NAME ": %s\n", __func__);
@@ -47,7 +47,7 @@ int fwdlusb_listupPrinter(uint8_t *rIdArray) {
     return ret;
 }
 
-typedef int (*ogfwdlusb_listupPrinterSN)(uint64_t *rSerialArray);
+typedef int (__stdcall *ogfwdlusb_listupPrinterSN)(uint64_t *rSerialArray);
 
 int fwdlusb_listupPrinterSN(uint64_t *rSerialArray) {
     dprintf_sv(NAME ": %s\n", __func__);
@@ -55,7 +55,7 @@ int fwdlusb_listupPrinterSN(uint64_t *rSerialArray) {
     return ret;
 }
 
-typedef int (*ogfwdlusb_selectPrinter)(uint8_t printerId, uint16_t *rResult);
+typedef int (__stdcall *ogfwdlusb_selectPrinter)(uint8_t printerId, uint16_t *rResult);
 
 int fwdlusb_selectPrinter(uint8_t printerId, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d)\n", __func__, printerId);
@@ -64,7 +64,7 @@ int fwdlusb_selectPrinter(uint8_t printerId, uint16_t *rResult) {
     return ret;
 }
 
-typedef int (*ogfwdlusb_selectPrinterSN)(uint64_t printerSN, uint16_t *rResult);
+typedef int (__stdcall *ogfwdlusb_selectPrinterSN)(uint64_t printerSN, uint16_t *rResult);
 
 int fwdlusb_selectPrinterSN(uint64_t printerSN, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%ld)\n", __func__, printerSN);
@@ -73,7 +73,7 @@ int fwdlusb_selectPrinterSN(uint64_t printerSN, uint16_t *rResult) {
     return ret;
 }
 
-typedef int (*ogfwdlusb_getPrinterInfo)(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen);
+typedef int (__stdcall *ogfwdlusb_getPrinterInfo)(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen);
 
 int fwdlusb_getPrinterInfo(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen) {
     dprintf_sv(NAME ": %s(%d,%d)\n", __func__, tagNumber, *rLen);
@@ -101,7 +101,7 @@ int fwdlusb_getPrinterInfo(uint16_t tagNumber, uint8_t *rBuffer, uint32_t *rLen)
     return ret;
 }
 
-typedef int (*ogfwdlusb_status)(uint16_t *rResult);
+typedef int (__stdcall *ogfwdlusb_status)(uint16_t *rResult);
 
 int fwdlusb_status(uint16_t *rResult) {
     dprintf_sv(NAME ": %s\n", __func__);
@@ -110,7 +110,7 @@ int fwdlusb_status(uint16_t *rResult) {
     return ret;
 }
 
-typedef int (*ogfwdlusb_statusAll)(uint8_t *idArray, uint16_t *rResultArray);
+typedef int (__stdcall *ogfwdlusb_statusAll)(uint8_t *idArray, uint16_t *rResultArray);
 
 int fwdlusb_statusAll(uint8_t *idArray, uint16_t *rResultArray) {
     dprintf_sv(NAME ": %s\n", __func__);
@@ -118,7 +118,7 @@ int fwdlusb_statusAll(uint8_t *idArray, uint16_t *rResultArray) {
     return ret;
 }
 
-typedef int (*ogfwdlusb_resetPrinter)(uint16_t *rResult);
+typedef int (__stdcall *ogfwdlusb_resetPrinter)(uint16_t *rResult);
 
 int fwdlusb_resetPrinter(uint16_t *rResult) {
     dprintf_sv(NAME ": %s\n", __func__);
@@ -264,7 +264,7 @@ int fwdlusb_updateFirmware_param(uint8_t update, LPCSTR filename, uint16_t *rRes
     return result;
 }
 
-typedef int (*ogfwdlusb_updateFirmware)(uint8_t update, LPCSTR filename, uint16_t *rResult);
+typedef int (__stdcall *ogfwdlusb_updateFirmware)(uint8_t update, LPCSTR filename, uint16_t *rResult);
 
 int fwdlusb_updateFirmware(uint8_t update, LPCSTR filename, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d, %s)\n", __func__, update, filename);
@@ -372,7 +372,7 @@ int fwdlusb_getFirmwareInfo_param(LPCSTR filename, uint8_t *rBuffer, uint32_t *r
     return result;
 }
 
-typedef int (*ogfwdlusb_getFirmwareInfo)(uint8_t update, LPCSTR filename, uint8_t *rBuffer, uint32_t *rLen,
+typedef int (__stdcall *ogfwdlusb_getFirmwareInfo)(uint8_t update, LPCSTR filename, uint8_t *rBuffer, uint32_t *rLen,
                                          uint16_t *rResult);
 
 int fwdlusb_getFirmwareInfo(uint8_t update, LPCSTR filename, uint8_t *rBuffer, uint32_t *rLen, uint16_t *rResult) {
@@ -401,7 +401,7 @@ int fwdlusb_getFirmwareInfo(uint8_t update, LPCSTR filename, uint8_t *rBuffer, u
     }
 }
 
-typedef int (*ogfwdlusb_MakeThread)(uint16_t maxCount);
+typedef int (__stdcall *ogfwdlusb_MakeThread)(uint16_t maxCount);
 
 int fwdlusb_MakeThread(uint16_t maxCount) {
     dprintf_sv(NAME ": %s(%d)\n", __func__, maxCount);
@@ -409,7 +409,7 @@ int fwdlusb_MakeThread(uint16_t maxCount) {
     return ret;
 }
 
-typedef int (*ogfwdlusb_ReleaseThread)(uint16_t *rResult);
+typedef int (__stdcall *ogfwdlusb_ReleaseThread)(uint16_t *rResult);
 
 int fwdlusb_ReleaseThread(uint16_t *rResult) {
     dprintf_sv(NAME ": %s\n", __func__);
@@ -418,7 +418,7 @@ int fwdlusb_ReleaseThread(uint16_t *rResult) {
     return ret;
 }
 
-typedef int (*ogfwdlusb_AttachThreadCount)(uint16_t *rCount, uint16_t *rMaxCount);
+typedef int (__stdcall *ogfwdlusb_AttachThreadCount)(uint16_t *rCount, uint16_t *rMaxCount);
 
 int fwdlusb_AttachThreadCount(uint16_t *rCount, uint16_t *rMaxCount) {
     dprintf_sv(NAME ": %s\n", __func__);
@@ -426,7 +426,7 @@ int fwdlusb_AttachThreadCount(uint16_t *rCount, uint16_t *rMaxCount) {
     return ret;
 }
 
-typedef int (*ogfwdlusb_getErrorLog)(uint16_t index, uint8_t *rData, uint16_t *rResult);
+typedef int (__stdcall *ogfwdlusb_getErrorLog)(uint16_t index, uint8_t *rData, uint16_t *rResult);
 
 int fwdlusb_getErrorLog(uint16_t index, uint8_t *rData, uint16_t *rResult) {
     dprintf_sv(NAME ": %s(%d)\n", __func__, index);

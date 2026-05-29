@@ -9,20 +9,20 @@ Note: Cards WILL be stretched, simply because the cards between printers are dif
 Tested with:
 CHC-310 -> CHC-310
 CHC-310 -> CHC-310
+CHC-320 -> CHC-320
 CHC-320 -> CHC-330
 CHC-330 -> CHC-310
 CHC-330 -> CHC-330
 
 --- Usage ---
 
-* Place CHCXXXusb.dll and CHCXXXFWDLUsb.dll into game folder.
-    * If the original printer is a CHC-330, use CHC330Ausb.dll instead, and rename CHCXXXusb.dll to chcusb.dll
-* Backup the original files and rename the shim files to your printer model (ex. C310Ausb.dll, C310AFWDLUsb.dll)
-    * If the incoming and outgoing model are the same (= you're sniffing printer communication), append "_orig" to the filename (ex. C310Ausb_orig.dll / C310AFWDLUsb_orig.dll)
-* Copy the real DLLs from your target printer into the game folder (ex. C330Ausb.dll, C330AFWDLUsb.dll)
-* Edit printerbot.ini that incoming and outgoing model numbers match.
+* Place chcusb.dll and chcfwdl.dll into the game folder.
+* Append _orig to the original filenames that already exist. (ex. C310Ausb_orig.dll, C310AFWDLUsb_orig.dll)
+* Rename chcusb.dll and chcfwdl.dll to whatever the original files were called.
+* Copy the real DLLs from your target printer model into the game folder (ex. C330Ausb.dll, C330AFWDLUsb.dll)
+* Edit printerbot.ini that incoming and outgoing model numbers are correct.
 * Make sure segatools printer hooks are disabled.
-* Start the game (no inject required for printerbot)
+* Start the game (no inject/launch.bat changes required)
 
 --- Compiling ---
 

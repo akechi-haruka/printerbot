@@ -1,51 +1,52 @@
 LIBRARY chcusb
 
 EXPORTS
-    chcusb_MakeThread
-    chcusb_open
-    chcusb_close
-    chcusb_ReleaseThread
-    chcusb_listupPrinter
-    chcusb_listupPrinterSN
-    chcusb_selectPrinter
-    chcusb_selectPrinterSN
-    chcusb_getPrinterInfo
-    chcusb_imageformat=chcusb_imageformat_310
-    chcusb_setmtf
-    chcusb_makeGamma
-    chcusb_setIcctable
-    chcusb_copies
-    chcusb_status
-    chcusb_statusAll
-    chcusb_startpage
-    chcusb_endpage
-    chcusb_write
-    chcusb_writeLaminate
-    chcusb_writeHolo
-    chcusb_setPrinterInfo
-    chcusb_getGamma
-    chcusb_getMtf
-    chcusb_cancelCopies
-    chcusb_setPrinterToneCurve
-    chcusb_getPrinterToneCurve
-    chcusb_blinkLED
-    chcusb_resetPrinter
-    chcusb_AttachThreadCount
-    chcusb_getPrintIDStatus
-    chcusb_setPrintStandby
-    chcusb_testCardFeed
-    chcusb_exitCard
-    chcusb_getCardRfidTID
-    chcusb_commCardRfidReader
-    chcusb_updateCardRfidReader
-    chcusb_getErrorLog
-    chcusb_getErrorStatus
-    chcusb_setCutList
-    chcusb_setLaminatePattern
-    chcusb_color_adjustment
-    chcusb_color_adjustmentEx
-    chcusb_getEEPROM
-    chcusb_setParameter
-    chcusb_getParameter
-    chcusb_universal_command
+    chcusb_MakeThread @1
+    chcusb_open @2
+    chcusb_close @3
+    chcusb_ReleaseThread @4
+    chcusb_listupPrinter @5
+    chcusb_listupPrinterSN @6
+    chcusb_selectPrinter @7
+    chcusb_selectPrinterSN @8
+    chcusb_getPrinterInfo @9
+    chcusb_imageformat=chcusb_imageformat_310 @10
+    chcusb_setmtf @11
+    chcusb_makeGamma @12
+    chcusb_setIcctable @13
+    chcusb_copies @14
+    chcusb_status @15
+    chcusb_statusAll @16
+    chcusb_startpage @17
+    chcusb_endpage @18
+    chcusb_write @19
+    chcusb_writeLaminate @20
+    chcusb_writeHolo @21
+    chcusb_setPrinterInfo @22
+    chcusb_getGamma @23
+    chcusb_getMtf @24
+    chcusb_cancelCopies @25
+    chcusb_setPrinterToneCurve @26
+    chcusb_getPrinterToneCurve @27
+    chcusb_blinkLED @28
+    chcusb_resetPrinter @29
+    chcusb_AttachThreadCount @30
+    chcusb_getPrintIDStatus @31
+    chcusb_setPrintStandby @32
+    chcusb_testCardFeed @33
+    chcusb_exitCard @34
+    chcusb_getCardRfidTID @35
+    chcusb_commCardRfidReader @36
+    chcusb_updateCardRfidReader @37
+    chcusb_getErrorLog @38
+    chcusb_getErrorStatus @39
+    chcusb_setCutList @40
+    chcusb_setLaminatePattern @41
+    chcusb_color_adjustment @42
+    chcusb_color_adjustmentEx @43
+    chcusb_writeIred @50
+    chcusb_getEEPROM @58
+    chcusb_setParameter @64
+    chcusb_getParameter @65
+    chcusb_universal_command @73
     chcusb_shim_install
